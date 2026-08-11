@@ -1,0 +1,11 @@
+RIGS CPU DESIGNER — GITHUB SETUP
+
+1. Read GITHUB_PAGES_SETUP.md for the illustrated-by-name, step-by-step process.
+2. Create an empty PUBLIC repository at github.com named rigs-cpu-designer.
+3. Upload everything inside this folder to that repository.
+4. In the repository, open Settings > Pages and choose GitHub Actions.
+5. Wait for the two green checks under the Actions tab.
+6. Copy the website address shown under Settings > Pages and send it to testers.
+
+You do not need to install Node.js or any programming tools. GitHub builds the
+website automatically. Testers only need the final link and a web browser.
