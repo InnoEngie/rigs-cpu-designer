@@ -1,11 +1,25 @@
-RIGS CPU DESIGNER — GITHUB SETUP
+RIGS FULL COMPONENT PROTOTYPE — GITHUB UPDATE
+================================================
 
-1. Read GITHUB_PAGES_SETUP.md for the illustrated-by-name, step-by-step process.
-2. Create an empty PUBLIC repository at github.com named rigs-cpu-designer.
-3. Upload everything inside this folder to that repository.
-4. In the repository, open Settings > Pages and choose GitHub Actions.
-5. Wait for the two green checks under the Actions tab.
-6. Copy the website address shown under Settings > Pages and send it to testers.
+This folder is ready to replace the files in your existing GitHub repository.
 
-You do not need to install Node.js or any programming tools. GitHub builds the
-website automatically. Testers only need the final link and a web browser.
+QUICKEST UPDATE
+
+1. Open your existing rigs-cpu-designer repository on GitHub.
+2. Upload the contents of this folder, preserving the folder tree.
+3. Make sure this exact workflow file exists:
+      .github/workflows/deploy-pages.yml
+4. Commit the upload to the main branch.
+5. Open the Actions tab and wait for “Deploy RIGS prototype to GitHub Pages”
+   to turn green.
+6. Your existing GitHub Pages address will update automatically.
+
+IMPORTANT
+
+GitHub's drag-and-drop uploader can flatten or skip folders. If that happens,
+create the folders manually in GitHub, as you did for the first version.
+
+The new prototype stores saved components in the tester's browser. Each tester
+has their own local library, and clearing browser site data will clear it.
+
+See GITHUB_PAGES_SETUP.md for the full file-tree and troubleshooting guide.

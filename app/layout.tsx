@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RIGS CPU Designer Prototype",
-  description: "A playable spatial CPU floorplanning and packaging prototype for RIGS.",
+  title: "RIGS Full Component Design Prototype",
+  description: "Design, save, and compatibility-check a complete roster of RIGS computer hardware.",
   other: {
     "codex-preview": "development",
   },

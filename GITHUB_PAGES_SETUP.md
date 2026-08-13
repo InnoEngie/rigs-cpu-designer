@@ -1,60 +1,68 @@
-# Put the RIGS CPU prototype online with GitHub Pages
+# Updating the RIGS GitHub Pages prototype
 
-Everything needed for publishing is already included in this project. GitHub
-will build the prototype automatically and give you a shareable web address.
+The project includes its own publishing workflow. Once the files are in the correct folders, every commit to `main` automatically tests, builds, and updates the existing GitHub Pages site.
 
-## First-time setup
+## Required folder tree
 
-1. Sign in at [github.com](https://github.com/) and select the **+** menu in the
-   upper-right, then **New repository**.
-2. Name the repository `rigs-cpu-designer` (another name also works).
-3. Set it to **Public**. Leave **Add a README**, `.gitignore`, and license
-   unchecked, then select **Create repository**.
-4. Extract the supplied `rigs-cpu-designer-github-ready.zip` on your computer.
-5. On the empty repository page, choose **uploading an existing file**. Drag all
-   of the extracted project's contents into the upload area. This includes the
-   folders such as `.github`, `app`, `github-pages`, `lib`, `public`, and
-   `scripts`.
-6. At the bottom, select **Commit changes**.
-7. Open the repository's **Settings** tab, choose **Pages** in the left sidebar,
-   and set **Source** to **GitHub Actions** if it is not already selected.
-8. Open the **Actions** tab. The workflow named **Deploy RIGS prototype to
-   GitHub Pages** should be running. When both jobs show green check marks, open
-   **Settings → Pages** again to find the live address.
+Confirm these files appear at these exact paths:
 
-The address will normally look like:
+```text
+.github/
+  workflows/
+    deploy-pages.yml
+app/
+  designers.tsx
+  system-pages.tsx
+  page.tsx
+  globals.css
+github/
+  index.html
+  main.tsx
+lib/
+  chip-analysis.ts
+  component-model.ts
+  expansion-analysis.ts
+tests/
+  chip-analysis.test.ts
+  full-system.test.ts
+vite.github.config.ts
+package.json
+package-lock.json
+```
 
-`https://YOUR-GITHUB-NAME.github.io/rigs-cpu-designer/`
+The repository contains additional support files; keep those too.
 
-Send that address to testers. They only need a normal web browser.
+## Uploading the update
 
-## Publishing later updates
+1. Extract the ZIP.
+2. In the repository's **Code** tab, upload the extracted contents.
+3. Preserve the folder names. GitHub's browser upload can sometimes mishandle hidden folders, especially `.github`; manually create `.github/workflows` if necessary.
+4. Commit the files to the `main` branch.
+5. Open **Actions** and select **Deploy RIGS prototype to GitHub Pages**.
+6. After both `build` and `deploy` are green, refresh the existing Pages URL.
 
-Upload the changed project files to the same repository and commit them to the
-`main` branch. GitHub automatically rebuilds the website at the same address.
-Testers do not need to reinstall or download anything.
+Your **Settings → Pages → Source** should remain set to **GitHub Actions**.
 
-## If the deployment does not start
+## What testers should know
 
-- Check **Settings → Pages** and confirm the source is **GitHub Actions**.
-- Check **Actions** for a yellow banner asking you to enable workflows, then
-  approve it.
-- If the repository uses a branch named something other than `main`, rename it
-  to `main` or change `branches: [main]` in
-  `.github/workflows/deploy-pages.yml`.
-- A red workflow run can be opened to show which named step failed. Keep that
-  page available if you want help diagnosing it.
+- Saved components persist in that browser using local storage.
+- Different devices and browsers have separate libraries.
+- Clearing the browser's site data removes saved components.
+- The Rig Builder reads saved parts immediately; there is no account or server database.
 
-## Optional local check
+## If the workflow does not appear
 
-If Node.js is already installed, you can verify the GitHub version before
-uploading:
+Verify `.github/workflows/deploy-pages.yml` exists in the repository and is not nested inside another copy of the project folder. The workflow appears in the main **Actions** tab, not **Settings → Actions → Runners**.
+
+## Optional local test
+
+With Node.js 22 installed, run:
 
 ```powershell
 npm ci
+npm run test:logic
 npm run build:github
-npx vite preview --outDir dist-github
+npx vite --config vite.github.config.ts
 ```
 
-The GitHub workflow performs the same install and build automatically, so this
-local check is not required.
+The terminal will show the local address to open.

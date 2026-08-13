@@ -20,8 +20,15 @@ import {
   type ChipAnalysis,
   type Tool,
 } from "../lib/chip-analysis";
+import {
+  createSavedComponent,
+  type ComponentType,
+  type SavedComponent,
+} from "../lib/component-model";
+import { RosterDesigner } from "./designers";
+import { MainSplash, RigBuilder, SavedLibrary } from "./system-pages";
 
-type Screen = "hub" | "components" | "cpu" | "placeholder";
+type Screen = "splash" | "hub" | "components" | "group" | "cpu" | "designer" | "library" | "rig" | "placeholder";
 type DieView = "choose" | "saved" | "size" | "grid";
 
 type ComponentOption = {
@@ -29,7 +36,9 @@ type ComponentOption = {
   code: string;
   description: string;
   note: string;
-  cpu?: boolean;
+  type?: ComponentType;
+  group?: "Storage" | "Network";
+  placeholder?: boolean;
 };
 
 const COMPONENTS: ComponentOption[] = [
@@ -38,69 +47,92 @@ const COMPONENTS: ComponentOption[] = [
     code: "CPU",
     description: "General-purpose compute package",
     note: "Complete die-to-package workflow",
-    cpu: true,
+    type: "CPU",
   },
   {
     name: "Expansion Card",
     code: "EXP",
     description: "Specialized accelerator or controller",
     note: "Die → Layout → Size → Heat Spreader; future 8-axis problem-structure readout",
+    type: "Expansion Card",
   },
   {
     name: "RAM",
     code: "MEM",
     description: "DIMM and DRAM assembly",
     note: "DRAM dies, generation, chip count, rank, and ECC",
+    type: "RAM",
   },
   {
     name: "Storage",
     code: "STR",
     description: "Persistent data systems",
     note: "Choose SSD, HDD, holographic, DNA, or another storage type first",
+    group: "Storage",
   },
   {
     name: "Motherboard",
     code: "MB",
     description: "Board-level component integration",
     note: "Configuration-driven design flow; no silicon floorplan",
+    type: "Motherboard",
   },
   {
     name: "Power Supply",
     code: "PSU",
     description: "Power conversion and distribution",
     note: "Configuration-driven design flow",
+    type: "Power Supply",
   },
   {
     name: "Cooling / Fans",
     code: "THM",
     description: "Thermal transport and airflow",
     note: "Configuration-driven design flow",
+    type: "Cooling",
   },
   {
     name: "Cases",
     code: "CAS",
     description: "Chassis and environmental enclosure",
     note: "Configuration-driven design flow",
+    type: "Case",
   },
   {
     name: "Units / Racks",
     code: "RCK",
     description: "Multi-machine deployment hardware",
     note: "Configuration-driven design flow",
+    type: "Rack",
   },
   {
     name: "Network",
     code: "NET",
     description: "NIC, switchboard, router, and gateway",
     note: "Automatically routes to the correct die- or configuration-based workflow",
+    group: "Network",
   },
   {
     name: "Exotic Compute",
     code: "XTC",
     description: "Quantum, wetware, chemical, and biological systems",
     note: "Uses specialized primitives rather than the silicon pixel grid",
+    placeholder: true,
   },
 ];
+
+const GROUP_COMPONENTS: Record<"Storage" | "Network", ComponentOption[]> = {
+  Storage: [
+    { name: "SSD", code: "SSD", description: "NAND solid-state storage", note: "Light IC plus package flow", type: "SSD" },
+    { name: "HDD", code: "HDD", description: "Magnetic platter storage", note: "Mechanical configuration flow", type: "HDD" },
+    { name: "Holographic", code: "HSG", description: "Layered optical archive", note: "Speculative medium configuration", type: "Holographic Storage" },
+    { name: "DNA", code: "DNA", description: "Molecular archival storage", note: "Synthesis and sequencing configuration", type: "DNA Storage" },
+  ],
+  Network: [
+    { name: "NIC", code: "NIC", description: "Host network interface", note: "Light IC plus PCIe package", type: "NIC" },
+    { name: "Switchboard / Router / Gateway", code: "NET", description: "Multi-port network appliance", note: "Ports, backplane, processing, and firmware", type: "Network Appliance" },
+  ],
+};
 
 const STEPS = ["Die", "Layout", "Size", "Heat Spreader", "Finalize"];
 
@@ -178,7 +210,7 @@ function TopBar({
 }) {
   return (
     <header className="topbar">
-      <button className="brand" onClick={onHome} aria-label="Return to Design and Fabrication hub">
+      <button className="brand" onClick={onHome} aria-label="Return to RIGS workspace">
         <span className="brand-mark">R</span>
         <span>
           <strong>RIGS</strong>
@@ -186,16 +218,19 @@ function TopBar({
         </span>
       </button>
       <nav className="breadcrumbs" aria-label="Breadcrumb">
-        <button onClick={onHome}>Design &amp; Fabrication</button>
-        {screen !== "hub" && <span>/</span>}
-        {(screen === "components" || screen === "cpu" || screen === "placeholder") && (
+        <button onClick={onHome}>RIGS Workspace</button>
+        {screen !== "splash" && <span>/</span>}
+        {(screen === "hub" || screen === "components" || screen === "group" || screen === "cpu" || screen === "designer" || screen === "placeholder") && (
           <button onClick={onComponents}>Design New Component</button>
         )}
         {screen === "cpu" && <span>/ CPU</span>}
+        {screen === "designer" && <span>/ Component Designer</span>}
+        {screen === "library" && <span>/ Saved Components</span>}
+        {screen === "rig" && <span>/ Rig Builder</span>}
       </nav>
       <div className="session-chip">
         <span className="status-light" />
-        SESSION / UNSAVED
+        LOCAL LIBRARY / ACTIVE
       </div>
     </header>
   );
@@ -211,7 +246,7 @@ function SectionHeading({ eyebrow, title, copy }: { eyebrow: string; title: stri
   );
 }
 
-function Hub({ onComponents, onPlaceholder }: { onComponents: () => void; onPlaceholder: (title: string, note: string) => void }) {
+function Hub({ onComponents }: { onComponents: () => void }) {
   return (
     <main className="page-shell hub-page">
       <SectionHeading
@@ -229,30 +264,11 @@ function Hub({ onComponents, onPlaceholder }: { onComponents: () => void; onPlac
           </span>
           <span className="card-arrow">→</span>
         </button>
-        <button
-          className="hub-card"
-          onClick={() => onPlaceholder("Saved Dies", "A reusable library of previously designed silicon dies will live here. No dies have been saved in this session.")}
-        >
-          <span className="card-index">02</span>
-          <span className="hub-icon">▦</span>
-          <span className="hub-card-content">
-            <strong>Saved Dies</strong>
-            <span>Inspect and reuse validated monolithic die floorplans.</span>
-          </span>
-          <span className="card-arrow">→</span>
-        </button>
-        <button
-          className="hub-card"
-          onClick={() => onPlaceholder("Production", "Manufacturing equipment, lithography machines, process capacity, and fabrication queues will be managed here.")}
-        >
-          <span className="card-index">03</span>
-          <span className="hub-icon">⌂</span>
-          <span className="hub-card-content">
-            <strong>Production</strong>
-            <span>Build and operate the fabrication line that turns designs into hardware.</span>
-          </span>
-          <span className="card-arrow">→</span>
-        </button>
+        <div className="hub-card hub-info-card">
+          <span className="card-index">ROSTER</span>
+          <span className="hub-icon">14</span>
+          <span className="hub-card-content"><strong>Fourteen working component flows</strong><span>Deep floorplanning, light IC painting, and configuration-driven hardware all route from one task-first menu.</span></span>
+        </div>
       </section>
       <footer className="system-footer">
         <span>ENGINEERING WORKSPACE</span>
@@ -264,10 +280,12 @@ function Hub({ onComponents, onPlaceholder }: { onComponents: () => void; onPlac
 }
 
 function ComponentLibrary({
-  onCpu,
+  onComponent,
+  onGroup,
   onPlaceholder,
 }: {
-  onCpu: () => void;
+  onComponent: (type: ComponentType) => void;
+  onGroup: (group: "Storage" | "Network") => void;
   onPlaceholder: (title: string, note: string) => void;
 }) {
   return (
@@ -281,19 +299,15 @@ function ComponentLibrary({
         {COMPONENTS.map((component, index) => (
           <button
             key={component.name}
-            className={`component-card ${component.cpu ? "available" : ""}`}
-            onClick={() =>
-              component.cpu
-                ? onCpu()
-                : onPlaceholder(component.name, `This is where the design page for ${component.name} lives. ${component.note}.`)
-            }
+            className={`component-card ${component.placeholder ? "" : "available"}`}
+            onClick={() => component.type ? onComponent(component.type) : component.group ? onGroup(component.group) : onPlaceholder(component.name, "Quantum and biological systems still need their own non-grid design primitives and remain outside this prototype.")}
           >
             <span className="component-number">{String(index + 1).padStart(2, "0")}</span>
             <span className="component-code">{component.code}</span>
             <span className="component-copy">
               <strong>{component.name}</strong>
               <small>{component.description}</small>
-              <em>{component.cpu ? "PROTOTYPE ACTIVE" : "ROUTE PLACEHOLDER"}</em>
+              <em>{component.placeholder ? "ROUTE PLACEHOLDER" : component.group ? "OPEN SUBCATEGORY" : "DESIGNER ACTIVE"}</em>
             </span>
             <span className="component-arrow">↗</span>
           </button>
@@ -301,6 +315,10 @@ function ComponentLibrary({
       </section>
     </main>
   );
+}
+
+function GroupLibrary({ group, onComponent, onBack }: { group: "Storage" | "Network"; onComponent: (type: ComponentType) => void; onBack: () => void }) {
+  return <main className="page-shell"><SectionHeading eyebrow={`${group.toUpperCase()} / SELECT TYPE`} title={`Choose ${group.toLowerCase()} hardware`} copy={`Each ${group.toLowerCase()} target opens the design primitive that fits it rather than forcing every part through a silicon floorplan.`} /><section className="component-grid">{GROUP_COMPONENTS[group].map((component, index) => <button key={component.name} className="component-card available" onClick={() => component.type && onComponent(component.type)}><span className="component-number">{String(index + 1).padStart(2, "0")}</span><span className="component-code">{component.code}</span><span className="component-copy"><strong>{component.name}</strong><small>{component.description}</small><em>DESIGNER ACTIVE</em></span><span className="component-arrow">↗</span></button>)}</section><div className="workflow-actions split"><button className="button ghost" onClick={onBack}>← Component roster</button></div></main>;
 }
 
 function Placeholder({ title, note, onBack }: { title: string; note: string; onBack: () => void }) {
@@ -364,7 +382,7 @@ function ChoiceCard({
   );
 }
 
-function DieChoice({ onSaved, onNew }: { onSaved: () => void; onNew: () => void }) {
+function DieChoice({ onSaved, onNew, savedCount }: { onSaved: () => void; onNew: () => void; savedCount: number }) {
   return (
     <div className="workflow-narrow">
       <div className="workflow-title">
@@ -373,26 +391,26 @@ function DieChoice({ onSaved, onNew }: { onSaved: () => void; onNew: () => void 
         <p>A CPU package begins with one monolithic silicon die. Reuse a proven design or floorplan a new one.</p>
       </div>
       <div className="large-choice-grid">
-        <ChoiceCard code="LIB" title="Pick from Saved Dies" description="Select an existing die from your reusable design library." meta="0 AVAILABLE" onClick={onSaved} />
+        <ChoiceCard code="LIB" title="Pick from Saved Components" description="Reuse the die floorplan stored inside a previously saved CPU." meta={`${savedCount} AVAILABLE`} onClick={onSaved} />
         <ChoiceCard code="NEW" title="Design New Die" description="Choose dimensions, draw the silicon floorplan, and validate connectivity." meta="FLOORPLANNING TOOL" onClick={onNew} />
       </div>
     </div>
   );
 }
 
-function SavedDieEmpty({ onBack, onNew }: { onBack: () => void; onNew: () => void }) {
+function SavedDiePicker({ saved, onPick, onBack, onNew }: { saved: SavedComponent[]; onPick: (component: SavedComponent) => void; onBack: () => void; onNew: () => void }) {
   return (
     <div className="workflow-narrow">
       <div className="workflow-title">
         <p className="eyebrow">SAVED DIES / LIBRARY</p>
-        <h2>No saved dies yet</h2>
-        <p>Completed die designs will appear here once persistence is connected.</p>
+        <h2>{saved.length ? "Reuse a saved CPU die" : "No saved CPU dies yet"}</h2>
+        <p>Saved CPU records retain the complete floorplan and construction settings.</p>
       </div>
-      <div className="empty-state">
+      {saved.length === 0 ? <div className="empty-state">
         <span className="empty-grid">▦</span>
         <strong>LIBRARY EMPTY</strong>
-        <p>This prototype keeps designs in memory for the current session only.</p>
-      </div>
+        <p>Finish and save a CPU, or start a new die below.</p>
+      </div> : <div className="picker-list inline-picker">{saved.map((component) => <button key={component.id} onClick={() => onPick(component)}><span>CPU</span><div><strong>{component.name}</strong><small>{component.stats["Core count"] ?? "Saved floorplan"} cores</small></div><em>LOAD DIE →</em></button>)}</div>}
       <div className="workflow-actions split">
         <button className="button ghost" onClick={onBack}>← Die source</button>
         <button className="button primary" onClick={onNew}>Design a new die →</button>
@@ -794,7 +812,7 @@ function SummaryStats({ analysis }: { analysis: ChipAnalysis }) {
   );
 }
 
-function FinalizeStep({ analysis, packageLayout, packageSize, material, thermalInterface, partName, onName, onBack, onKeepWorking, onExit }: { analysis: ChipAnalysis; packageLayout: string; packageSize: string; material: string; thermalInterface: string; partName: string; onName: (value: string) => void; onBack: () => void; onKeepWorking: () => void; onExit: () => void }) {
+function FinalizeStep({ analysis, packageLayout, packageSize, material, thermalInterface, partName, onName, onBack, onKeepWorking, onSave, onExit, saved }: { analysis: ChipAnalysis; packageLayout: string; packageSize: string; material: string; thermalInterface: string; partName: string; onName: (value: string) => void; onBack: () => void; onKeepWorking: () => void; onSave: () => void; onExit: () => void; saved: boolean }) {
   return (
     <div className="finalize-shell">
       <div className="finalize-title"><p className="eyebrow">STEP 05 / DESIGN REVIEW</p><span className="review-status"><i /> FLOORPLAN COMPUTED</span><h2>{partName || "Unnamed CPU"}</h2><p>Review the current in-memory design. Placeholder formulas are shown honestly and update if you return to the floorplan.</p></div>
@@ -813,12 +831,12 @@ function FinalizeStep({ analysis, packageLayout, packageSize, material, thermalI
           {analysis.warnings.length > 0 ? <div className="final-warning"><strong>{analysis.warnings.length} DESIGN {analysis.warnings.length === 1 ? "FLAG" : "FLAGS"}</strong>{analysis.warnings.map((warning) => <p key={warning}>{warning}</p>)}</div> : <div className="final-valid"><span>✓</span><p><strong>NO ACTIVE FLAGS</strong>All placed compute is connected.</p></div>}
         </aside>
       </div>
-      <div className="final-actions"><button className="button ghost" onClick={onBack}>← Thermal assembly</button><div><button className="button secondary" disabled title="Persistence is outside this prototype">Save unavailable</button><button className="button secondary" onClick={onKeepWorking}>Keep Working</button><button className="button primary exit-button" onClick={onExit}>Exit to Hub</button></div></div>
+      <div className="final-actions"><button className="button ghost" onClick={onBack}>← Thermal assembly</button><div><button className="button secondary" disabled={!partName.trim() || saved} onClick={onSave}>{saved ? "Saved" : "Save Component"}</button><button className="button secondary" onClick={onKeepWorking}>Keep Working</button><button className="button primary exit-button" onClick={onExit}>Exit to Hub</button></div></div>
     </div>
   );
 }
 
-function CpuDesigner({ onExit }: { onExit: () => void }) {
+function CpuDesigner({ onExit, onSave, savedCpus }: { onExit: () => void; onSave: (component: SavedComponent) => void; savedCpus: SavedComponent[] }) {
   const [step, setStep] = useState(0);
   const [highestStep, setHighestStep] = useState(0);
   const [dieView, setDieView] = useState<DieView>("choose");
@@ -830,44 +848,109 @@ function CpuDesigner({ onExit }: { onExit: () => void }) {
   const [material, setMaterial] = useState("Copper");
   const [thermalInterface, setThermalInterface] = useState("Solder");
   const [partName, setPartName] = useState("");
+  const [saved, setSaved] = useState(false);
 
   const analysis = useMemo(() => analyzeChip(cells, width, height), [cells, width, height]);
   const goForward = (target: number) => { setStep(target); setHighestStep((current) => Math.max(current, target)); };
   const createDie = () => { setCells(Array(width * height).fill(null)); setDieView("grid"); setHighestStep(0); };
+  const loadSavedDie = (component: SavedComponent) => {
+    const design = component.designData ?? {};
+    const savedWidth = Number(design.width ?? 15);
+    const savedHeight = Number(design.height ?? 18);
+    setWidth(savedWidth);
+    setHeight(savedHeight);
+    setCells(Array.isArray(design.cells) ? design.cells as Array<Cell | null> : Array(savedWidth * savedHeight).fill(null));
+    setPackageLayout(String(design.packageLayout ?? component.compatibility.cpuLayout ?? "LGA"));
+    setPackageSize(String(design.packageSize ?? "Standard"));
+    setMaterial(String(design.material ?? "Copper"));
+    setThermalInterface(String(design.thermalInterface ?? "Solder"));
+    setPartName(`${component.name} Rev B`);
+    setSaved(false);
+    setDieView("grid");
+  };
+  const saveCpu = () => {
+    const graphics = analysis.graphicsUnits.reduce((sum, unit) => sum + unit.score, 0);
+    onSave(createSavedComponent("CPU", partName, {
+      "Core count": analysis.cores.length,
+      "Clock range": analysis.cores.length ? `${formatNumber(Math.min(...analysis.cores.map((core) => core.clock)), 2)}–${formatNumber(Math.max(...analysis.cores.map((core) => core.clock)), 2)} GHz` : "—",
+      "L2 cache": `${formatNumber(analysis.totalL2)} MB`,
+      "L3 cache": `${formatNumber(analysis.totalL3)} MB`,
+      Heat: formatNumber(analysis.heat),
+      "I/O throughput": formatNumber(analysis.ioThroughput, 0),
+      Graphics: formatNumber(graphics),
+      Layout: packageLayout,
+      "Package size": packageSize,
+    }, { cpuLayout: packageLayout as "LGA" | "PGA" | "BGA" }, { width, height, cells, packageLayout, packageSize, material, thermalInterface }));
+    setSaved(true);
+  };
 
   return (
     <main className="designer-page">
       <div className="designer-header"><div><p className="eyebrow">COMPONENT DESIGN / CPU</p><h1>Central Processing Unit</h1></div><span>DESIGN STATE: IN MEMORY</span></div>
       <Stepper step={step} highestStep={highestStep} onStep={(target) => { setStep(target); if (target === 0 && cells.length) setDieView("grid"); }} />
       <div className="workflow-body">
-        {step === 0 && dieView === "choose" && <DieChoice onSaved={() => setDieView("saved")} onNew={() => setDieView("size")} />}
-        {step === 0 && dieView === "saved" && <SavedDieEmpty onBack={() => setDieView("choose")} onNew={() => setDieView("size")} />}
+        {step === 0 && dieView === "choose" && <DieChoice savedCount={savedCpus.length} onSaved={() => setDieView("saved")} onNew={() => setDieView("size")} />}
+        {step === 0 && dieView === "saved" && <SavedDiePicker saved={savedCpus} onPick={loadSavedDie} onBack={() => setDieView("choose")} onNew={() => setDieView("size")} />}
         {step === 0 && dieView === "size" && <DieSize width={width} height={height} onWidth={setWidth} onHeight={setHeight} onBack={() => setDieView("choose")} onCreate={createDie} />}
         {step === 0 && dieView === "grid" && <DieEditor width={width} height={height} cells={cells} setCells={setCells} analysis={analysis} onResize={() => setDieView("size")} onContinue={() => goForward(1)} />}
         {step === 1 && <LayoutStep selected={packageLayout} onSelect={setPackageLayout} onBack={() => setStep(0)} onNext={() => goForward(2)} />}
         {step === 2 && <SizeStep selected={packageSize} onSelect={setPackageSize} onBack={() => setStep(1)} onNext={() => goForward(3)} />}
         {step === 3 && <HeatSpreaderStep material={material} thermalInterface={thermalInterface} onMaterial={setMaterial} onInterface={setThermalInterface} onBack={() => setStep(2)} onNext={() => goForward(4)} />}
-        {step === 4 && <FinalizeStep analysis={analysis} packageLayout={packageLayout} packageSize={packageSize} material={material} thermalInterface={thermalInterface} partName={partName} onName={setPartName} onBack={() => setStep(3)} onKeepWorking={() => { setStep(0); setDieView("grid"); }} onExit={onExit} />}
+        {step === 4 && <FinalizeStep analysis={analysis} packageLayout={packageLayout} packageSize={packageSize} material={material} thermalInterface={thermalInterface} partName={partName} onName={(value) => { setPartName(value); setSaved(false); }} onBack={() => setStep(3)} onKeepWorking={() => { setStep(0); setDieView("grid"); setSaved(false); }} onSave={saveCpu} onExit={onExit} saved={saved} />}
       </div>
     </main>
   );
 }
 
 export default function Home() {
-  const [screen, setScreen] = useState<Screen>("hub");
+  const [screen, setScreen] = useState<Screen>("splash");
   const [placeholder, setPlaceholder] = useState({ title: "", note: "" });
+  const [placeholderBack, setPlaceholderBack] = useState<Screen>("components");
   const [designerKey, setDesignerKey] = useState(0);
+  const [activeComponent, setActiveComponent] = useState<ComponentType>("HDD");
+  const [activeGroup, setActiveGroup] = useState<"Storage" | "Network">("Storage");
+  const [savedComponents, setSavedComponents] = useState<SavedComponent[]>([]);
+  const [libraryReady, setLibraryReady] = useState(false);
+  useEffect(() => {
+    const stored = (() => {
+      try { return window.localStorage.getItem("rigs-saved-components-v2"); }
+      catch { return null; }
+    })();
+    const timer = window.setTimeout(() => {
+      if (stored) {
+        try { setSavedComponents(JSON.parse(stored) as SavedComponent[]); }
+        catch { /* A damaged record starts a clean local library. */ }
+      }
+      setLibraryReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    if (!libraryReady) return;
+    try { window.localStorage.setItem("rigs-saved-components-v2", JSON.stringify(savedComponents)); } catch { /* Session state still works. */ }
+  }, [savedComponents, libraryReady]);
 
-  const openPlaceholder = (title: string, note: string) => { setPlaceholder({ title, note }); setScreen("placeholder"); };
+  const addSaved = (component: SavedComponent) => setSavedComponents((current) => [component, ...current]);
+  const openPlaceholder = (title: string, note: string, back: Screen = "components") => { setPlaceholder({ title, note }); setPlaceholderBack(back); setScreen("placeholder"); };
+  const openComponent = (type: ComponentType) => {
+    setActiveComponent(type);
+    setDesignerKey((value) => value + 1);
+    setScreen(type === "CPU" ? "cpu" : "designer");
+  };
   const exitDesigner = () => { setDesignerKey((value) => value + 1); setScreen("hub"); };
 
   return (
     <div className="app-frame">
-      <TopBar screen={screen} onHome={() => setScreen("hub")} onComponents={() => setScreen("components")} />
-      {screen === "hub" && <Hub onComponents={() => setScreen("components")} onPlaceholder={openPlaceholder} />}
-      {screen === "components" && <ComponentLibrary onCpu={() => setScreen("cpu")} onPlaceholder={openPlaceholder} />}
-      {screen === "placeholder" && <Placeholder title={placeholder.title} note={placeholder.note} onBack={() => setScreen("components")} />}
-      {screen === "cpu" && <CpuDesigner key={designerKey} onExit={exitDesigner} />}
+      <TopBar screen={screen} onHome={() => setScreen("splash")} onComponents={() => setScreen("components")} />
+      {screen === "splash" && <MainSplash onFabrication={() => setScreen("hub")} onLibrary={() => setScreen("library")} onRig={() => setScreen("rig")} onProduction={() => openPlaceholder("Production", "Manufacturing equipment, lithography machines, process capacity, and fabrication queues will live here.", "splash")} />}
+      {screen === "hub" && <Hub onComponents={() => setScreen("components")} />}
+      {screen === "components" && <ComponentLibrary onComponent={openComponent} onGroup={(group) => { setActiveGroup(group); setScreen("group"); }} onPlaceholder={openPlaceholder} />}
+      {screen === "group" && <GroupLibrary group={activeGroup} onComponent={openComponent} onBack={() => setScreen("components")} />}
+      {screen === "placeholder" && <Placeholder title={placeholder.title} note={placeholder.note} onBack={() => setScreen(placeholderBack)} />}
+      {screen === "library" && <SavedLibrary saved={savedComponents} onDelete={(id) => setSavedComponents((current) => current.filter((item) => item.id !== id))} onBack={() => setScreen("splash")} />}
+      {screen === "rig" && <RigBuilder saved={savedComponents} onBack={() => setScreen("splash")} />}
+      {screen === "cpu" && <CpuDesigner key={designerKey} onExit={exitDesigner} onSave={addSaved} savedCpus={savedComponents.filter((component) => component.type === "CPU")} />}
+      {screen === "designer" && <RosterDesigner key={designerKey} type={activeComponent} onSave={addSaved} onExit={exitDesigner} />}
     </div>
   );
 }

@@ -1,15 +1,15 @@
-import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
-// GitHub Pages serves projects from /account/repository/. Relative asset URLs
-// let the same build work under any repository name without manual editing.
+const repository = process.env.GITHUB_REPOSITORY?.split("/")[1];
+const base = process.env.GITHUB_ACTIONS === "true" && repository ? `/${repository}/` : "/";
+
 export default defineConfig({
-  root: "github-pages",
-  base: "./",
-  publicDir: "../public",
+  root: "github",
+  base,
   plugins: [react()],
   build: {
-    outDir: "../dist-github",
+    outDir: "../github-dist",
     emptyOutDir: true,
   },
 });
