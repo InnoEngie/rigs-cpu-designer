@@ -1,4 +1,4 @@
-name: Deploy RIGS prototype to GitHub Pages
+name: Deploy RIGS to GitHub Pages
 
 on:
   push:
@@ -6,7 +6,6 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: read
   contents: read
   pages: write
   id-token: write
@@ -20,25 +19,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download repository
-        uses: actions/checkout@v5
-
+        uses: actions/checkout@v4
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - name: Install project dependencies
         run: npm ci
-
       - name: Build static GitHub Pages version
         run: npm run build:github
-
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v6
-
+        uses: actions/configure-pages@v5
       - name: Upload website files
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@v3
         with:
           path: github-dist
 
@@ -49,6 +43,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Publish website
+      - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v4
