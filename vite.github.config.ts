@@ -1,15 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-
-const repository = process.env.GITHUB_REPOSITORY?.split("/")[1];
-const base = process.env.GITHUB_ACTIONS === "true" && repository ? `/${repository}/` : "/";
+import path from "node:path";
 
 export default defineConfig({
-  root: "github",
-  base,
   plugins: [react()],
+  root: "github",
+  publicDir: path.resolve(process.cwd(), "public"),
+  base: "./",
   build: {
-    outDir: "../github-dist",
+    outDir: path.resolve(process.cwd(), "github-dist"),
     emptyOutDir: true,
+    rollupOptions: { input: path.resolve(process.cwd(), "github/index.html") },
   },
 });

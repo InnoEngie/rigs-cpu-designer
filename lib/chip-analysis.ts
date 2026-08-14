@@ -11,9 +11,10 @@ export type Tool = AreaType | "erase";
 
 export type CellSettings = {
   transistor?: "Planar" | "FinFET" | "GAA";
+  transistorSize?: number | "sub-2";
   tier?: "Performance" | "Efficiency";
   deliveryLocation?: "Front-side" | "Backside";
-  density?: number;
+  cacheTopology?: "6T" | "8T" | "10T";
   quality?: number;
   interfaceType?: "Standard" | "High-Bandwidth";
 };
@@ -112,12 +113,13 @@ export const AREA_META: Record<
 
 export const DEFAULT_SETTINGS: Record<AreaType, CellSettings> = {
   alu: {
-    transistor: "FinFET",
+    transistor: "Planar",
+    transistorSize: 500,
     tier: "Performance",
     deliveryLocation: "Front-side",
   },
-  l2: { density: 2 },
-  l3: { density: 2 },
+  l2: { cacheTopology: "6T", transistorSize: 500 },
+  l3: { cacheTopology: "6T", transistorSize: 500 },
   interconnect: {},
   power: { quality: 2 },
   io: { interfaceType: "Standard" },
@@ -227,8 +229,11 @@ function settingForBlob(cells: Array<Cell | null>, blob: Blob) {
   return cells[blob.cells[0]]?.settings ?? {};
 }
 
-const densityMultiplier = (value = 2) => [0, 0.65, 1, 1.45][value] ?? 1;
 const qualityMultiplier = (value = 2) => [0, 0.7, 1, 1.4][value] ?? 1;
+const processDensity = (node: number | "sub-2" = 500) =>
+  Math.max(0.7, Math.pow(130 / (node === "sub-2" ? 1.5 : node), 0.22));
+const cacheTopologyMultiplier = (topology: CellSettings["cacheTopology"] = "6T") =>
+  ({ "6T": 1, "8T": 0.84, "10T": 0.72 })[topology];
 
 export function analyzeChip(
   cells: Array<Cell | null>,
@@ -262,7 +267,8 @@ export function analyzeChip(
   const l2ByCore = Array(blobs.alu.length).fill(0) as number[];
   let totalL2 = 0;
   for (const cache of blobs.l2) {
-    const value = cache.cells.length * 0.75 * densityMultiplier(settingForBlob(cells, cache).density);
+    const cacheSettings = settingForBlob(cells, cache);
+    const value = cache.cells.length * 0.75 * processDensity(cacheSettings.transistorSize) * cacheTopologyMultiplier(cacheSettings.cacheTopology);
     totalL2 += value;
     const targets = adjacentBlobIds(cache, blobs.alu, width, height);
     targets.forEach((target) => {
@@ -273,7 +279,8 @@ export function analyzeChip(
   const l3ByCore = Array(blobs.alu.length).fill(0) as number[];
   let totalL3 = 0;
   for (const cache of blobs.l3) {
-    const value = cache.cells.length * 2.5 * densityMultiplier(settingForBlob(cells, cache).density);
+    const cacheSettings = settingForBlob(cells, cache);
+    const value = cache.cells.length * 2.5 * processDensity(cacheSettings.transistorSize) * cacheTopologyMultiplier(cacheSettings.cacheTopology);
     totalL3 += value;
     const targets = adjacentBlobIds(cache, blobs.alu, width, height);
     const touchedNetworks = adjacentBlobIds(cache, blobs.interconnect, width, height);
@@ -305,7 +312,8 @@ export function analyzeChip(
     const fullClock =
       (0.8 + Math.sqrt(blob.cells.length) * 0.58) *
       tierMultiplier[tier] *
-      transistorMultiplier[transistor];
+      transistorMultiplier[transistor] *
+      processDensity(settings.transistorSize);
     const starved = coreNetworkIds[index].size === 0;
     const rawHeat = blob.cells.length * (tier === "Performance" ? 5.4 : 3.2);
     return {
